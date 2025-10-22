@@ -302,9 +302,9 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## Contact
 
 For questions and discussions:
-- GitHub Issues: [https://github.com/yourusername/TranspOLMo-1B/issues](https://github.com/yourusername/TranspOLMo-1B/issues)
-- Email: your.email@example.com
+- GitHub Issues: [https://github.com/BarzinL/TranspOLMo-1B/issues](https://github.com/BarzinL/TranspOLMo-1B/issues)
+- Email: barzin@duck.com
 
 ---
 
-**Built with the belief that AI systems should be fully understandable, not black boxes.**
+**Built with the belief that AI systems should be fully understandable, not black boxes.** <- Claude Code said this I didn't don't come after me, we're just innocent men
