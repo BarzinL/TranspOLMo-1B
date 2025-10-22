@@ -265,8 +265,8 @@ If you use TranspOLMo in your research, please cite:
 @software{transpolmo2024,
   title={TranspOLMo: First-Principles Neural Network Interpretability},
   author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/TranspOLMo-1B}
+  year={2025},
+  url={https://github.com/BarzinL/TranspOLMo-1B}
 }
 ```
 
