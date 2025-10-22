@@ -307,4 +307,4 @@ For questions and discussions:
 
 ---
 
-**Built with the belief that AI systems should be fully understandable, not black boxes.** <- Claude Code said this I didn't don't come after me, we're just innocent men
+**Built with the belief that AI systems should be fully understandable, not black boxes.** <- Claude Code said this I didn't don't come after me, [we're just innocent men](https://www.youtube.com/watch?v=lr_vl62JblQ)
