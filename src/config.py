@@ -9,7 +9,7 @@ from pathlib import Path
 class ModelConfig:
     """Configuration for model loading and analysis."""
 
-    model_name: str = "allenai/OLMo-2-1124-1B"
+    model_name: str = "allenai/OLMo-2-0425-1B"
     cache_dir: Path = Path("./data/models")
     device: str = "cuda"  # or "cpu"
     dtype: str = "float32"  # or "float16", "bfloat16"

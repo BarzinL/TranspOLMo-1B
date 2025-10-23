@@ -33,12 +33,12 @@ def main():
     """Run complete transparency analysis pipeline."""
 
     parser = argparse.ArgumentParser(description='Run TranspOLMo analysis pipeline')
-    parser.add_argument('--model', type=str, default='allenai/OLMo-2-1124-1B',
-                        help='Model name or path')
-    parser.add_argument('--num-samples', type=int, default=1000,
-                        help='Number of samples for analysis')
-    parser.add_argument('--device', type=str, default='cuda',
-                        help='Device to use (cuda/cpu)')
+    parser.add_argument('--model', type=str, default=None,
+                        help='Model name or path (default: from config.py)')
+    parser.add_argument('--num-samples', type=int, default=None,
+                        help='Number of samples for analysis (default: from config.py)')
+    parser.add_argument('--device', type=str, default=None,
+                        help='Device to use (cuda/cpu) (default: from config.py)')
     parser.add_argument('--skip-sae', action='store_true',
                         help='Skip SAE training (faster)')
     parser.add_argument('--layers', type=str, default=None,
@@ -46,19 +46,24 @@ def main():
 
     args = parser.parse_args()
 
+    # Initialize config from config.py (single source of truth)
+    config = Config.default()
+
+    # Only override config if arguments were explicitly provided
+    if args.model is not None:
+        config.model.model_name = args.model
+    if args.device is not None:
+        config.model.device = args.device
+    if args.num_samples is not None:
+        config.extraction.num_samples = args.num_samples
+
     print("=" * 80)
     print("TRANSPOLMO: First-Principles Neural Network Interpretability")
     print("=" * 80)
-    print(f"\nModel: {args.model}")
-    print(f"Device: {args.device}")
-    print(f"Samples: {args.num_samples}")
+    print(f"\nModel: {config.model.model_name}")
+    print(f"Device: {config.model.device}")
+    print(f"Samples: {config.extraction.num_samples}")
     print()
-
-    # Initialize config
-    config = Config.default()
-    config.model.model_name = args.model
-    config.model.device = args.device
-    config.extraction.num_samples = args.num_samples
 
     # Parse layer selection
     if args.layers:
