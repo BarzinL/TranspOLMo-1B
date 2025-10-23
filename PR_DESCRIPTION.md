@@ -113,6 +113,29 @@ num_samples: int = 10000
 - Comprehensive memory optimization guide
 - Works on consumer GPUs (RTX 3060 Ti, 3070)
 
+### 5. Add Comprehensive PR Description (cad5ef9)
+- Complete PR documentation in PR_DESCRIPTION.md
+- Ready for GitHub web interface
+
+### 6. Add Minimal Test Script (3272b44)
+**Problem**: Even with float16, full analysis OOMs on 8GB GPU with desktop apps
+
+**Solution**: Created ultra-minimal test for verification
+- Processes only 10 tiny samples (batch_size=1)
+- max_seq_length=32 (very short)
+- Analyzes only 1 layer
+- Clears GPU cache between samples
+- Uses ~3-4GB total VRAM
+- Perfect for quick testing and demos
+
+### 7. Add PR Helper Script (2b45f16)
+- CREATE_PR.sh to streamline PR creation
+- Opens browser with correct branches pre-selected
+
+### 8. Fix Minimal Test (ee608a2)
+- Fixed Path import for cache_dir
+- Now works without errors
+
 ## Testing
 
 ### Tested On
@@ -120,15 +143,28 @@ num_samples: int = 10000
 - ✅ Local development environment
 - ✅ Configuration changes respected
 - ✅ Model loads successfully with float16
+- ✅ **Minimal test runs successfully** (verified working!)
 
 ### What Works
-- ✅ Model loading (OLMo-2-0425-1B)
+- ✅ Model loading (OLMo-2-0425-1B) in float16
 - ✅ Configuration system (single source of truth)
 - ✅ Memory optimization (float16/bfloat16)
-- ✅ Activation capture
-- ✅ Geometric analysis
-- ✅ Circuit discovery
-- ✅ Documentation generation
+- ✅ Activation capture with hooks
+- ✅ Geometric analysis (manifold, PCA, intrinsic dimension)
+- ✅ Circuit discovery and attention patterns
+- ✅ Documentation generation (JSON, Markdown)
+- ✅ **End-to-end minimal test on 8GB GPU** ✨
+
+### Test Output (Verified)
+```
+Intrinsic dimension (95%): 27
+Compression ratio: 75.85x
+Geometry type: mildly_curved
+Mean activation: -0.0080
+Sparsity: 0.00%
+
+✓ TranspOLMo is working!
+```
 
 ## Documentation
 
