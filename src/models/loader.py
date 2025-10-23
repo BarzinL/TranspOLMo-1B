@@ -9,7 +9,7 @@ from pathlib import Path
 class OLMo2Loader:
     """Load and prepare OLMo2 models for analysis."""
 
-    def __init__(self, model_name: str, cache_dir: Path, device: str = "cuda"):
+    def __init__(self, model_name: str, cache_dir: Path, device: str = "cuda", dtype: str = "float32"):
         """
         Initialize loader.
 
@@ -17,13 +17,26 @@ class OLMo2Loader:
             model_name: HuggingFace model identifier
             cache_dir: Directory to cache downloaded models
             device: Device to load model on ('cuda' or 'cpu')
+            dtype: Data type for model ('float32', 'float16', 'bfloat16')
         """
         self.model_name = model_name
         self.cache_dir = cache_dir
-        self.device = device if torch.cuda.is_available() else "cpu"
 
-        if self.device == "cuda" and not torch.cuda.is_available():
+        # Auto-detect if CUDA is requested but not available
+        if device == "cuda" and not torch.cuda.is_available():
             print("Warning: CUDA requested but not available. Using CPU.")
+            self.device = "cpu"
+        else:
+            self.device = device
+
+        # Convert dtype string to torch dtype
+        dtype_map = {
+            "float32": torch.float32,
+            "float16": torch.float16,
+            "bfloat16": torch.bfloat16,
+        }
+        self.dtype = dtype_map.get(dtype, torch.float32)
+        self.dtype_str = dtype
 
     def load(self) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
         """
@@ -34,6 +47,7 @@ class OLMo2Loader:
         """
         print(f"Loading {self.model_name}...")
         print(f"Device: {self.device}")
+        print(f"Dtype: {self.dtype_str}")
 
         # Ensure cache directory exists
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -49,17 +63,18 @@ class OLMo2Loader:
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        # Load model
+        # Load model with specified dtype
+        print(f"Loading model weights in {self.dtype_str}...")
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             cache_dir=str(self.cache_dir),
-            torch_dtype=torch.float32,  # Full precision for analysis
-            device_map=self.device if self.device == "cuda" else None,
+            torch_dtype=self.dtype,
             trust_remote_code=True
         )
 
-        if self.device == "cpu":
-            model = model.to("cpu")
+        # Move model to device
+        print(f"Moving model to {self.device}...")
+        model = model.to(self.device)
 
         model.eval()  # Always in eval mode for analysis
 
