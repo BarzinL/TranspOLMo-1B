@@ -41,13 +41,19 @@ poetry install
 Run the complete analysis pipeline:
 
 ```bash
-python scripts/run_full_analysis.py --model allenai/OLMo-2-1124-1B --num-samples 1000
+# Uses defaults from src/config.py
+python scripts/run_full_analysis.py
+
+# Or override specific settings
+python scripts/run_full_analysis.py --model allenai/OLMo-2-0425-1B --num-samples 1000
 ```
 
+**Configuration**: All defaults are in `src/config.py`. Command-line args override when provided. See [Configuration Guide](docs/configuration.md) for details.
+
 Options:
-- `--model`: Model name or path (default: allenai/OLMo-2-1124-1B)
-- `--num-samples`: Number of samples for analysis (default: 1000)
-- `--device`: Device to use, cuda or cpu (default: cuda)
+- `--model`: Model name or path (default: from config.py)
+- `--num-samples`: Number of samples for analysis (default: from config.py)
+- `--device`: Device to use, cuda or cpu (default: from config.py)
 - `--skip-sae`: Skip SAE training for faster analysis
 - `--layers`: Comma-separated layer indices to analyze (e.g., "0,6,11")
 
@@ -59,7 +65,7 @@ from src.models.hooks import ActivationCapture
 from src.analysis.geometry.manifold import ManifoldAnalyzer
 
 # Load model
-loader = OLMo2Loader("allenai/OLMo-2-1124-1B", cache_dir="./data/models")
+loader = OLMo2Loader("allenai/OLMo-2-0425-1B", cache_dir="./data/models")
 model, tokenizer = loader.load()
 
 # Capture activations
