@@ -9,6 +9,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import torch
+from pathlib import Path
 from src.models.loader import OLMo2Loader
 from src.models.hooks import ActivationCapture
 from src.analysis.geometry.manifold import ManifoldAnalyzer
@@ -22,7 +23,7 @@ print()
 print("Loading model in float16...")
 loader = OLMo2Loader(
     model_name="allenai/OLMo-2-0425-1B",
-    cache_dir="./data/models",
+    cache_dir=Path("./data/models"),
     device="cuda",
     dtype="float16"
 )
