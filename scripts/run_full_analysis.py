@@ -39,6 +39,8 @@ def main():
                         help='Number of samples for analysis (default: from config.py)')
     parser.add_argument('--device', type=str, default=None,
                         help='Device to use (cuda/cpu) (default: from config.py)')
+    parser.add_argument('--dtype', type=str, default=None,
+                        help='Data type: float32, float16, bfloat16 (default: from config.py)')
     parser.add_argument('--skip-sae', action='store_true',
                         help='Skip SAE training (faster)')
     parser.add_argument('--layers', type=str, default=None,
@@ -54,6 +56,8 @@ def main():
         config.model.model_name = args.model
     if args.device is not None:
         config.model.device = args.device
+    if args.dtype is not None:
+        config.model.dtype = args.dtype
     if args.num_samples is not None:
         config.extraction.num_samples = args.num_samples
 
@@ -79,7 +83,8 @@ def main():
     loader = OLMo2Loader(
         model_name=config.model.model_name,
         cache_dir=config.model.cache_dir,
-        device=config.model.device
+        device=config.model.device,
+        dtype=config.model.dtype
     )
 
     model, tokenizer = loader.load()
