@@ -20,10 +20,13 @@ class OLMo2Loader:
         """
         self.model_name = model_name
         self.cache_dir = cache_dir
-        self.device = device if torch.cuda.is_available() else "cpu"
 
-        if self.device == "cuda" and not torch.cuda.is_available():
+        # Auto-detect if CUDA is requested but not available
+        if device == "cuda" and not torch.cuda.is_available():
             print("Warning: CUDA requested but not available. Using CPU.")
+            self.device = "cpu"
+        else:
+            self.device = device
 
     def load(self) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
         """
@@ -50,16 +53,17 @@ class OLMo2Loader:
             tokenizer.pad_token = tokenizer.eos_token
 
         # Load model
+        print(f"Loading model weights...")
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             cache_dir=str(self.cache_dir),
-            torch_dtype=torch.float32,  # Full precision for analysis
-            device_map=self.device if self.device == "cuda" else None,
+            dtype=torch.float32,  # Full precision for analysis
             trust_remote_code=True
         )
 
-        if self.device == "cpu":
-            model = model.to("cpu")
+        # Move model to device
+        print(f"Moving model to {self.device}...")
+        model = model.to(self.device)
 
         model.eval()  # Always in eval mode for analysis
 
