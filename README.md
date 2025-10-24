@@ -270,7 +270,7 @@ If you use TranspOLMo in your research, please cite:
 ```bibtex
 @software{transpolmo2024,
   title={TranspOLMo: First-Principles Neural Network Interpretability},
-  author={Your Name},
+  author={Barzin Lotfabadi},
   year={2025},
   url={https://github.com/BarzinL/TranspOLMo-1B}
 }
