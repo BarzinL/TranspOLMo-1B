@@ -1,0 +1,21 @@
+# Kaggle-optimized configuration
+compute:
+  device: "cuda"
+  dtype: "float16"
+  batch_size: 32
+  cpu_offload: false  # Kaggle has good GPU memory
+
+paths:
+  cache_dir: "/kaggle/working/cache"
+  output_dir: "/kaggle/working/results"
+  hf_cache: "/kaggle/working/hf_cache"
+
+analysis:
+  num_samples: 10000
+  layers: [0, 6, 11]  # Representative layers
+  skip_sae: true  # For initial runs
+  checkpoints: ["step1000-tokens4B"]  # Start with final checkpoint
+
+model:
+  name: "allenai/OLMo-2-1124-1B"
+  revision: "main"
