@@ -7,11 +7,8 @@ git clone --depth 1 https://github.com/BarzinL/TranspOLMo2-1B.git
 cd TranspOLMo2-1B
 pip install -q -e .[all]
 
-# Run analysis with sensible defaults
+# Run analysis with Kaggle config
+# You can override any setting by passing additional arguments
 python scripts/run_full_analysis.py \
-    --num-samples 10000 \
-    --dtype float16 \
-    --layers "0,6,11" \
-    --skip-sae \
-    --output-dir /kaggle/working/results \
-    "$@"  # Pass through any additional arguments
+    --config configs/kaggle.yaml \
+    "$@"  # Pass through any additional arguments to override config

@@ -15,6 +15,7 @@ from pathlib import Path
 import json
 from tqdm import tqdm
 import argparse
+import yaml
 
 from src.config import Config
 from src.models.loader import OLMo2Loader
@@ -33,6 +34,8 @@ def main():
     """Run complete transparency analysis pipeline."""
 
     parser = argparse.ArgumentParser(description='Run TranspOLMo analysis pipeline')
+    parser.add_argument('--config', type=str, default=None,
+                        help='Path to YAML config file (optional)')
     parser.add_argument('--model', type=str, default=None,
                         help='Model name or path (default: from config.py)')
     parser.add_argument('--num-samples', type=int, default=None,
@@ -45,13 +48,53 @@ def main():
                         help='Skip SAE training (faster)')
     parser.add_argument('--layers', type=str, default=None,
                         help='Comma-separated layer indices to analyze (e.g., "0,6,11")')
+    parser.add_argument('--output-dir', type=str, default=None,
+                        help='Output directory for results (default: ./results)')
 
     args = parser.parse_args()
 
     # Initialize config from config.py (single source of truth)
     config = Config.default()
 
-    # Only override config if arguments were explicitly provided
+    # Load YAML config if provided
+    yaml_config = {}
+    if args.config:
+        config_path = Path(args.config)
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+            print(f"Loaded config from: {args.config}")
+        else:
+            print(f"Warning: Config file not found: {args.config}")
+
+    # Apply YAML config values (if present)
+    if 'model' in yaml_config:
+        if 'name' in yaml_config['model']:
+            config.model.model_name = yaml_config['model']['name']
+        if 'revision' in yaml_config['model']:
+            pass  # Can add revision support if needed
+
+    if 'compute' in yaml_config:
+        if 'device' in yaml_config['compute']:
+            config.model.device = yaml_config['compute']['device']
+        if 'dtype' in yaml_config['compute']:
+            config.model.dtype = yaml_config['compute']['dtype']
+        if 'batch_size' in yaml_config['compute']:
+            config.extraction.batch_size = yaml_config['compute']['batch_size']
+
+    if 'analysis' in yaml_config:
+        if 'num_samples' in yaml_config['analysis']:
+            config.extraction.num_samples = yaml_config['analysis']['num_samples']
+
+    if 'paths' in yaml_config:
+        if 'cache_dir' in yaml_config['paths']:
+            config.model.cache_dir = yaml_config['paths']['cache_dir']
+        if 'output_dir' in yaml_config['paths']:
+            config.documentation.output_dir = yaml_config['paths']['output_dir']
+        if 'hf_cache' in yaml_config['paths']:
+            os.environ['HF_HOME'] = yaml_config['paths']['hf_cache']
+
+    # CLI arguments override everything (highest priority)
     if args.model is not None:
         config.model.model_name = args.model
     if args.device is not None:
@@ -60,6 +103,13 @@ def main():
         config.model.dtype = args.dtype
     if args.num_samples is not None:
         config.extraction.num_samples = args.num_samples
+    if args.output_dir is not None:
+        config.documentation.output_dir = args.output_dir
+
+    # Parse skip_sae from YAML or CLI
+    skip_sae = args.skip_sae
+    if 'analysis' in yaml_config and 'skip_sae' in yaml_config['analysis']:
+        skip_sae = skip_sae or yaml_config['analysis']['skip_sae']
 
     print("=" * 80)
     print("TRANSPOLMO: First-Principles Neural Network Interpretability")
@@ -69,9 +119,11 @@ def main():
     print(f"Samples: {config.extraction.num_samples}")
     print()
 
-    # Parse layer selection
+    # Parse layer selection (CLI > YAML > default)
     if args.layers:
         layer_indices = [int(x) for x in args.layers.split(',')]
+    elif 'analysis' in yaml_config and 'layers' in yaml_config['analysis']:
+        layer_indices = yaml_config['analysis']['layers']
     else:
         layer_indices = None
 
@@ -188,8 +240,9 @@ def main():
         print(f"  Geometry type: {results['local_geometry']['geometry_type']}")
 
     # Save geometric analysis
-    geom_output = Path("./results/geometric_analysis.json")
-    geom_output.parent.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(config.documentation.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    geom_output = output_dir / "geometric_analysis.json"
 
     with open(geom_output, 'w') as f:
         # Remove numpy arrays for JSON serialization
@@ -211,7 +264,7 @@ def main():
 
     feature_results = {}
 
-    if not args.skip_sae:
+    if not skip_sae:
         print("Training Sparse Autoencoders...")
 
         for layer_idx, activations in all_activations.items():
@@ -252,8 +305,8 @@ def main():
             feature_results[layer_idx] = features
 
             # Save SAE
-            sae_path = f"./results/sae_layer_{layer_idx}.pt"
-            trainer.save_model(sae_path)
+            sae_path = output_dir / f"sae_layer_{layer_idx}.pt"
+            trainer.save_model(str(sae_path))
             print(f"  Saved SAE to {sae_path}")
 
     else:
@@ -324,6 +377,21 @@ def main():
     doc_generator.save_documentation(full_docs, format='markdown')
     doc_generator.save_summary(full_docs)
 
+    # Save transparency scores in a separate file for easy access
+    transparency_scores = {
+        'transparency_score': full_docs.transparency_score,
+        'total_features_discovered': full_docs.total_features_discovered,
+        'total_circuits_discovered': full_docs.total_circuits_discovered,
+        'layers_analyzed': len(layer_indices),
+        'layer_indices': layer_indices,
+        'model_name': config.model.model_name,
+        'num_samples': config.extraction.num_samples,
+    }
+
+    scores_path = output_dir / "transparency_scores.json"
+    with open(scores_path, 'w') as f:
+        json.dump(transparency_scores, f, indent=2)
+
     print(f"\nDocumentation generated!")
     print(f"Transparency Score: {full_docs.transparency_score:.2%}")
 
@@ -357,9 +425,10 @@ def main():
     print(f"  - Layers Analyzed: {len(layer_indices)}")
     print(f"\nOutput files:")
     print(f"  - {geom_output}")
-    print(f"  - {config.documentation.output_dir}/model_documentation.json")
-    print(f"  - {config.documentation.output_dir}/model_documentation.md")
-    print(f"  - {config.documentation.output_dir}/summary.json")
+    print(f"  - {output_dir}/transparency_scores.json")
+    print(f"  - {output_dir}/model_documentation.json")
+    print(f"  - {output_dir}/model_documentation.md")
+    print(f"  - {output_dir}/summary.json")
     print()
 
 
