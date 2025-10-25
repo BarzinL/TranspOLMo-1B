@@ -87,6 +87,53 @@ def load_checkpoint(checkpoint_path):
         return json.load(f)
 
 
+def diagnose_gpu_setup():
+    """Diagnose GPU configuration for debugging."""
+    print("=" * 80)
+    print("GPU DIAGNOSTIC")
+    print("=" * 80)
+
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+    if num_gpus == 0:
+        print("⚠️  No GPUs detected - using CPU mode")
+        print("=" * 80)
+        return
+
+    print(f"PyTorch detects: {num_gpus} GPU(s)\n")
+
+    for i in range(num_gpus):
+        props = torch.cuda.get_device_properties(i)
+        mem_total = props.total_memory / 1e9
+
+        # Try to get current memory usage
+        try:
+            mem_allocated = torch.cuda.memory_allocated(i) / 1e9
+            mem_reserved = torch.cuda.memory_reserved(i) / 1e9
+            mem_available = mem_total - mem_reserved
+        except:
+            mem_allocated = 0
+            mem_reserved = 0
+            mem_available = mem_total
+
+        print(f"GPU {i}: {props.name}")
+        print(f"  Total memory: {mem_total:.1f}GB")
+        print(f"  Allocated: {mem_allocated:.2f}GB")
+        print(f"  Reserved: {mem_reserved:.2f}GB")
+        print(f"  Available: {mem_available:.1f}GB")
+        print()
+
+    if num_gpus > 1:
+        total_memory = sum(
+            torch.cuda.get_device_properties(i).total_memory
+            for i in range(num_gpus)
+        )
+        print(f"Total GPU memory across all devices: {total_memory/1e9:.1f}GB")
+        print("Note: Multi-GPU detected - will use device_map='auto' for model distribution")
+
+    print("=" * 80)
+
+
 def clear_gpu_memory():
     """Aggressively clear GPU memory."""
     if torch.cuda.is_available():
@@ -264,6 +311,10 @@ def main():
     if 'analysis' in yaml_config and 'skip_sae' in yaml_config['analysis']:
         skip_sae = skip_sae or yaml_config['analysis']['skip_sae']
 
+    # Diagnose GPU setup
+    diagnose_gpu_setup()
+    print()
+
     print("=" * 80)
     print("TRANSPOLMO: First-Principles Neural Network Interpretability")
     print("=" * 80)
@@ -336,30 +387,53 @@ def main():
 
     # Memory estimation
     print("\n--- Memory Estimation ---")
-    if config.model.device == "cuda" and torch.cuda.is_available():
-        # Estimate model parameters (rough estimate for 1B model)
+    if torch.cuda.is_available():
         model_params = sum(p.numel() for p in model.parameters())
+        num_gpus = torch.cuda.device_count()
 
-        mem_est = estimate_memory_requirements(
-            model_params=model_params,
-            num_samples=config.extraction.num_samples,
-            batch_size=config.extraction.batch_size,
-            hidden_size=arch_info['hidden_size'],
-            seq_length=config.extraction.max_seq_length
-        )
+        if num_gpus > 1:
+            # Multi-GPU mode with device_map
+            total_memory = sum(
+                torch.cuda.get_device_properties(i).total_memory
+                for i in range(num_gpus)
+            )
+            print(f"Multi-GPU mode: {num_gpus} devices")
+            print(f"Model parameters: {model_params/1e9:.2f}B")
+            print(f"Total GPU memory: {total_memory/1e9:.2f} GB")
+            print(f"Model distributed automatically by device_map='auto'")
+            print(f"Note: Each GPU will receive a portion of the model based on layer sizes")
 
-        available_memory = torch.cuda.get_device_properties(0).total_memory
-        print(f"Model parameters: {model_params/1e9:.2f}B")
-        print(f"Estimated peak memory: {mem_est['peak_memory']/1e9:.2f} GB")
-        print(f"Available GPU memory: {available_memory/1e9:.2f} GB")
+            # Show current usage per GPU
+            print(f"\nCurrent memory usage per GPU:")
+            for i in range(num_gpus):
+                allocated = torch.cuda.memory_allocated(i) / 1e9
+                reserved = torch.cuda.memory_reserved(i) / 1e9
+                total = torch.cuda.get_device_properties(i).total_memory / 1e9
+                print(f"  GPU {i}: {allocated:.2f}GB allocated / {total:.1f}GB total")
 
-        if mem_est['peak_memory'] > available_memory * 0.9:
-            print("⚠️  WARNING: Estimated memory usage is close to GPU limit!")
-            print("   OOM handling will automatically reduce batch size if needed.")
+        else:
+            # Single GPU mode
+            mem_est = estimate_memory_requirements(
+                model_params=model_params,
+                num_samples=config.extraction.num_samples,
+                batch_size=config.extraction.batch_size,
+                hidden_size=arch_info['hidden_size'],
+                seq_length=config.extraction.max_seq_length
+            )
 
-        # Show current GPU usage
-        print(f"Current GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f} GB")
-        print(f"Current GPU memory reserved: {torch.cuda.memory_reserved()/1e9:.2f} GB")
+            available_memory = torch.cuda.get_device_properties(0).total_memory
+            print(f"Single GPU mode")
+            print(f"Model parameters: {model_params/1e9:.2f}B")
+            print(f"Estimated peak memory: {mem_est['peak_memory']/1e9:.2f} GB")
+            print(f"Available GPU memory: {available_memory/1e9:.2f} GB")
+
+            if mem_est['peak_memory'] > available_memory * 0.9:
+                print("⚠️  WARNING: Estimated memory usage is close to GPU limit!")
+                print("   OOM handling will automatically reduce batch size if needed.")
+
+            # Show current GPU usage
+            print(f"Current GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+            print(f"Current GPU memory reserved: {torch.cuda.memory_reserved()/1e9:.2f} GB")
     else:
         print("Running on CPU - no GPU memory estimation needed")
 
