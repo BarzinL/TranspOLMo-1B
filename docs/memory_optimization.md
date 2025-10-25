@@ -341,3 +341,195 @@ But this is **not recommended** - the automatic system handles edge cases better
 ---
 
 **With automatic memory management, TranspOLMo works out-of-the-box on most GPUs!**
+
+## Multi-GPU Support (New in v2.1)
+
+### Automatic Multi-GPU Detection
+
+TranspOLMo now automatically detects and uses multiple GPUs when available:
+
+```
+If torch.cuda.device_count() > 1:
+  → Use device_map="auto" (HuggingFace Accelerate)
+  → Model distributed across GPUs automatically
+  → No configuration needed
+Else:
+  → Use traditional single GPU/CPU
+```
+
+### How It Works
+
+**Detection:**
+```
+GPU 0: Tesla T4 (15GB)
+GPU 1: Tesla T4 (15GB)
+Total: 30GB
+
+→ Automatically uses device_map="auto"
+→ HF Accelerate distributes layers optimally
+```
+
+**Distribution:**
+- First layers → GPU 0
+- Later layers → GPU 1
+- Distribution based on layer sizes
+- Communication handled automatically
+
+**Activation Hooks:**
+- Work transparently across devices
+- Activations moved to CPU immediately
+- No device conflicts
+
+### Benefits
+
+| Configuration | Memory | Speed | Use Case |
+|--------------|--------|-------|----------|
+| Single 8GB GPU | 8GB | Good | Small models, limited hardware |
+| Single 16GB GPU | 16GB | Better | Standard analysis |
+| 2× 15GB GPUs (Kaggle) | 30GB | Best | Large batches, many layers |
+| Single 24GB GPU | 24GB | Best | Single powerful GPU |
+
+**When Multi-GPU helps:**
+- ✅ Larger batch sizes (faster processing)
+- ✅ More layers analyzed simultaneously
+- ✅ Models that don't fit on single GPU
+
+**When single large GPU is better:**
+- ✅ Small models (< 2B params)
+- ✅ No inter-GPU communication overhead
+- ✅ Simpler setup
+
+### GPU Recommendations (Updated)
+
+| Setup | VRAM | Recommended Settings | Multi-GPU? |
+|-------|------|---------------------|-----------|
+| RTX 3060 Ti | 8GB  | `--dtype float16` | No (single GPU) |
+| RTX 3070/3080 | 8-10GB | `--dtype float16` | No (single GPU) |
+| Kaggle T4 × 2 | 2× 15GB | `--config configs/kaggle.yaml` | **Yes (auto)** |
+| RTX 4090 | 24GB | Default settings | No (don't need it) |
+| A100 | 40-80GB | Default settings | No (don't need it) |
+
+**Key insight:** Multi-GPU is automatic on platforms like Kaggle. You don't need to configure anything.
+
+### Requirements
+
+Multi-GPU support requires `accelerate`:
+
+```bash
+# Already in requirements.txt
+accelerate>=0.24.0
+```
+
+Installed automatically with: `pip install -e .[all]`
+
+### Example: Kaggle 2× T4
+
+**Before (single T4):**
+```
+Memory: 15GB total
+→ Must use float16
+→ Batch size limited
+→ Can analyze ~3 layers at once
+```
+
+**After (2× T4 with device_map):**
+```
+Memory: 30GB total
+→ Can use float16 or float32
+→ Larger batch sizes
+→ Can analyze more layers
+→ Model distributed automatically
+```
+
+### Troubleshooting Multi-GPU
+
+**Issue: Not detecting second GPU**
+
+Check:
+```python
+import torch
+print(torch.cuda.device_count())  # Should be 2
+
+# If 1, check platform GPU settings
+```
+
+**Issue: device_map fails**
+
+TranspOLMo handles this automatically:
+```
+⚠️ device_map='auto' failed: [error]
+Falling back to single GPU mode...
+✓ Continuing with cuda:0
+```
+
+**Issue: Slower than expected**
+
+Multi-GPU has overhead:
+- Inter-GPU communication
+- Synchronization costs
+- For small models, single GPU might be faster
+
+**Issue: Out of memory with 2 GPUs**
+
+Unlikely but possible:
+- device_map distributes unevenly
+- Some layers much larger than others
+- Fallback will activate
+- Can manually use single GPU: `--device cuda:0`
+
+### Technical Details
+
+**Under the hood:**
+
+```python
+# What device_map="auto" does:
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    device_map="auto",          # Automatic distribution
+    low_cpu_mem_usage=True,     # Efficient loading
+    torch_dtype=torch.float16   # Memory efficient
+)
+
+# Result:
+model.hf_device_map = {
+    'model.embed_tokens': 'cuda:0',
+    'model.layers.0': 'cuda:0',
+    'model.layers.1': 'cuda:0',
+    ...
+    'model.layers.8': 'cuda:1',
+    'model.layers.9': 'cuda:1',
+    ...
+    'lm_head': 'cuda:1'
+}
+```
+
+**How hooks work:**
+```python
+# Hooks capture activations regardless of device
+def hook_fn(module, input, output):
+    # output might be on cuda:0 or cuda:1
+    # Move to CPU immediately - works for both
+    return output.detach().cpu()
+
+# No device conflicts!
+```
+
+### When to Use Multi-GPU
+
+**Use multi-GPU when:**
+- ✅ Available on your platform (Kaggle, cloud)
+- ✅ Processing large batches
+- ✅ Analyzing many layers simultaneously
+- ✅ Model barely fits on single GPU
+
+**Don't bother when:**
+- ❌ Have single powerful GPU (24GB+)
+- ❌ Model comfortably fits in memory
+- ❌ Small batch sizes
+- ❌ Only analyzing few layers
+
+**Bottom line:** TranspOLMo auto-detects and uses multi-GPU optimally. You don't need to think about it!
+
+---
+
+**With multi-GPU support, TranspOLMo scales from 8GB budget GPUs to multi-GPU cloud environments!**

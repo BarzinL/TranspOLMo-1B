@@ -20,6 +20,7 @@ TranspOLMo is a comprehensive interpretability framework that uses first-princip
 - **Systematic Documentation**: Structured, queryable documentation of all findings
 - **Verification System**: Intervention-based validation of discovered features and circuits
 - **Memory Efficient**: One-layer-at-a-time processing with automatic OOM handling for 8-16GB GPUs
+- **Multi-GPU Support**: Automatic model distribution across multiple GPUs using HuggingFace Accelerate
 - **Checkpointing**: Resume from failures with automatic progress saving
 - **Cloud Ready**: Pre-configured for Kaggle notebooks with free GPU access
 
@@ -251,17 +252,27 @@ TranspOLMo includes automatic memory management for GPUs with limited VRAM:
 ### Features:
 - ✅ **One-layer-at-a-time processing**: Never loads all layers simultaneously
 - ✅ **Automatic OOM handling**: Catches out-of-memory errors and reduces batch size
+- ✅ **Multi-GPU support**: Automatically distributes model across multiple GPUs (requires `accelerate`)
 - ✅ **Progress checkpointing**: Resume from crashes without losing work
 - ✅ **Memory estimation**: Shows expected vs. available memory before starting
 - ✅ **Aggressive cleanup**: `torch.cuda.empty_cache()` after each layer
 
-### For 8GB-16GB GPUs:
+### For 8GB-16GB Single GPU:
 ```bash
 python scripts/run_full_analysis.py \
   --dtype float16 \
   --layers "0,6,11" \
   --skip-sae
 ```
+
+### For Multi-GPU (e.g., Kaggle 2× T4):
+Multi-GPU is automatically detected and used via HuggingFace `device_map="auto"`:
+```bash
+# Works automatically with 2+ GPUs
+python scripts/run_full_analysis.py --config configs/kaggle.yaml
+```
+
+The model will be automatically distributed across GPUs. No special configuration needed!
 
 See [Memory Optimization Guide](docs/memory_optimization.md) for more strategies.
 
