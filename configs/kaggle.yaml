@@ -16,6 +16,6 @@ analysis:
   skip_sae: true  # For initial runs
   checkpoints: ["step1000-tokens4B"]  # Start with final checkpoint
 
-model:
-  name: "allenai/OLMo-2-1124-1B"
-  revision: "main"
+# Model configuration inherited from src/config.py (single source of truth)
+# To override: pass --model allenai/OLMo-2-0425-1B via CLI
+
