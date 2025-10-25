@@ -9,7 +9,7 @@ def test_default_config():
     """Test default configuration creation."""
     config = Config.default()
 
-    assert config.model.model_name == "allenai/OLMo-2-1124-1B"
+    assert config.model.model_name == "allenai/OLMo-2-0425-1B"
     assert config.model.device in ["cuda", "cpu"]
     assert config.extraction.num_samples == 10000
     assert config.analysis.sae_hidden_size == 16384
