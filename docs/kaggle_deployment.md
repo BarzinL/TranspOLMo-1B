@@ -289,3 +289,105 @@ After running on Kaggle:
 ---
 
 **Kaggle makes it easy to run TranspOLMo without local GPU resources!**
+
+## Multi-GPU Support on Kaggle
+
+### Automatic Detection
+
+When you select **"GPU T4 × 2"** in Kaggle settings, TranspOLMo automatically:
+1. Detects both GPUs via `torch.cuda.device_count()`
+2. Uses HuggingFace `device_map="auto"` to distribute model layers
+3. Shows diagnostic info about GPU distribution
+4. Processes activations seamlessly across devices
+
+**No configuration needed!** Just select 2× GPUs and run normally.
+
+### Expected Output with 2× T4
+
+```
+================================================================================
+GPU DIAGNOSTIC
+================================================================================
+PyTorch detects: 2 GPU(s)
+
+GPU 0: Tesla T4
+  Total memory: 15.0GB
+  Allocated: 0.00GB
+  Reserved: 0.00GB
+  Available: 15.0GB
+
+GPU 1: Tesla T4
+  Total memory: 15.0GB
+  Allocated: 0.00GB
+  Reserved: 0.00GB
+  Available: 15.0GB
+
+Total GPU memory across all devices: 30.0GB
+Note: Multi-GPU detected - will use device_map='auto'
+================================================================================
+
+PHASE 1: Loading Model
+================================================================================
+
+Multi-GPU detected (2 GPUs) - using automatic device mapping
+  GPU 0: Tesla T4 (15.0GB)
+  GPU 1: Tesla T4 (15.0GB)
+
+Loading model weights in float16...
+✓ Model distributed across GPUs using device_map='auto'
+
+Device map summary:
+  cuda:0: 8 layers
+  cuda:1: 8 layers
+```
+
+### Benefits of 2× T4
+
+- ✅ **30GB total memory** vs 15GB single GPU
+- ✅ **Larger batch sizes** possible
+- ✅ **More layers** can be analyzed simultaneously
+- ✅ **Better parallelism** for activation extraction
+
+### Fallback to Single GPU
+
+If `device_map="auto"` fails (rare), the system automatically:
+1. Catches the exception
+2. Falls back to single GPU mode
+3. Continues analysis on `cuda:0`
+4. Logs warning for debugging
+
+This ensures robustness even with platform-specific GPU quirks.
+
+### Requirements
+
+Multi-GPU support requires the `accelerate` library, which is automatically installed:
+
+```python
+# Already included in requirements.txt
+accelerate>=0.24.0
+```
+
+When you run `pip install -e .[all]` in the Kaggle notebook, accelerate is installed.
+
+### Troubleshooting Multi-GPU
+
+**Problem: Only seeing 1 GPU**
+
+Solution:
+1. Check Kaggle settings: ⋮ → Accelerator → **GPU T4 × 2** (not just "GPU")
+2. Restart notebook kernel
+3. Re-run diagnostic cell
+
+**Problem: device_map error**
+
+Solution:
+- The system automatically falls back to single GPU
+- Check logs for specific error
+- Usually works fine on Kaggle's standard setup
+
+**Problem: Slower than expected**
+
+Solution:
+- Multi-GPU has communication overhead
+- For small models (1B params), single large GPU might be faster
+- Best for models that don't fit on single GPU
