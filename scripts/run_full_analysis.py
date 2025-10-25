@@ -88,9 +88,9 @@ def main():
 
     if 'paths' in yaml_config:
         if 'cache_dir' in yaml_config['paths']:
-            config.model.cache_dir = yaml_config['paths']['cache_dir']
+            config.model.cache_dir = Path(yaml_config['paths']['cache_dir'])
         if 'output_dir' in yaml_config['paths']:
-            config.documentation.output_dir = yaml_config['paths']['output_dir']
+            config.documentation.output_dir = Path(yaml_config['paths']['output_dir'])
         if 'hf_cache' in yaml_config['paths']:
             os.environ['HF_HOME'] = yaml_config['paths']['hf_cache']
 
@@ -104,7 +104,7 @@ def main():
     if args.num_samples is not None:
         config.extraction.num_samples = args.num_samples
     if args.output_dir is not None:
-        config.documentation.output_dir = args.output_dir
+        config.documentation.output_dir = Path(args.output_dir)
 
     # Parse skip_sae from YAML or CLI
     skip_sae = args.skip_sae
