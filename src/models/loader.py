@@ -42,6 +42,8 @@ class OLMo2Loader:
         """
         Load model and tokenizer.
 
+        Supports multi-GPU with automatic device mapping when multiple GPUs are available.
+
         Returns:
             Tuple of (model, tokenizer)
         """
@@ -63,22 +65,64 @@ class OLMo2Loader:
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        # Load model with specified dtype
-        print(f"Loading model weights in {self.dtype_str}...")
-        model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            cache_dir=str(self.cache_dir),
-            torch_dtype=self.dtype,
-            trust_remote_code=True
-        )
+        # Detect multi-GPU setup
+        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        use_device_map = num_gpus > 1 and self.device == "cuda"
 
-        # Move model to device
-        print(f"Moving model to {self.device}...")
-        model = model.to(self.device)
+        if use_device_map:
+            print(f"\nMulti-GPU detected ({num_gpus} GPUs) - using automatic device mapping")
+            for i in range(num_gpus):
+                props = torch.cuda.get_device_properties(i)
+                print(f"  GPU {i}: {props.name} ({props.total_memory/1e9:.1f}GB)")
+
+        # Load model with multi-GPU support or single device
+        print(f"\nLoading model weights in {self.dtype_str}...")
+
+        if use_device_map:
+            try:
+                model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    cache_dir=str(self.cache_dir),
+                    device_map="auto",
+                    torch_dtype=self.dtype,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True
+                )
+
+                # Update device to first parameter's actual device
+                self.device = next(model.parameters()).device
+                print(f"✓ Model distributed across GPUs using device_map='auto'")
+
+                # Log device map if available
+                if hasattr(model, 'hf_device_map'):
+                    print(f"\nDevice map summary:")
+                    device_counts = {}
+                    for name, device in model.hf_device_map.items():
+                        device_counts[device] = device_counts.get(device, 0) + 1
+                    for device, count in sorted(device_counts.items()):
+                        print(f"  {device}: {count} layers")
+
+            except Exception as e:
+                print(f"⚠️  device_map='auto' failed: {e}")
+                print(f"Falling back to single GPU mode...")
+                use_device_map = False
+
+        if not use_device_map:
+            # Single GPU or CPU mode
+            model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                cache_dir=str(self.cache_dir),
+                torch_dtype=self.dtype,
+                trust_remote_code=True
+            )
+
+            # Move model to device (traditional method)
+            print(f"Moving model to {self.device}...")
+            model = model.to(self.device)
 
         model.eval()  # Always in eval mode for analysis
 
-        print(f"Model loaded successfully!")
+        print(f"\n✓ Model loaded successfully!")
         print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         return model, tokenizer
