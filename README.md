@@ -19,6 +19,9 @@ TranspOLMo is a comprehensive interpretability framework that uses first-princip
 - **Circuit Discovery**: Automated identification of computational circuits through attention pattern analysis
 - **Systematic Documentation**: Structured, queryable documentation of all findings
 - **Verification System**: Intervention-based validation of discovered features and circuits
+- **Memory Efficient**: One-layer-at-a-time processing with automatic OOM handling for 8-16GB GPUs
+- **Checkpointing**: Resume from failures with automatic progress saving
+- **Cloud Ready**: Pre-configured for Kaggle notebooks with free GPU access
 
 ## Quick Start
 
@@ -44,18 +47,37 @@ Run the complete analysis pipeline:
 # Uses defaults from src/config.py
 python scripts/run_full_analysis.py
 
+# Use a YAML config file
+python scripts/run_full_analysis.py --config configs/kaggle.yaml
+
 # Or override specific settings
 python scripts/run_full_analysis.py --model allenai/OLMo-2-0425-1B --num-samples 1000
 ```
 
-**Configuration**: All defaults are in `src/config.py`. Command-line args override when provided. See [Configuration Guide](docs/configuration.md) for details.
+**Configuration Hierarchy**:
+1. `src/config.py` (defaults) → 2. YAML config file → 3. CLI arguments (highest priority)
 
-Options:
+See [Configuration Guide](docs/configuration.md) for details.
+
+**Options:**
+- `--config`: Path to YAML config file (optional)
 - `--model`: Model name or path (default: from config.py)
 - `--num-samples`: Number of samples for analysis (default: from config.py)
 - `--device`: Device to use, cuda or cpu (default: from config.py)
+- `--dtype`: float32, float16, or bfloat16 (default: from config.py)
+- `--output-dir`: Output directory for results (default: from config.py)
 - `--skip-sae`: Skip SAE training for faster analysis
 - `--layers`: Comma-separated layer indices to analyze (e.g., "0,6,11")
+
+### Quick Test (Low Memory)
+
+For quick validation on 8GB GPUs:
+
+```bash
+python scripts/minimal_test.py
+```
+
+This runs a minimal test with 10 samples on a single layer to verify everything works.
 
 ### Quick Example
 
@@ -90,8 +112,9 @@ print(f"Geometry type: {results['local_geometry']['geometry_type']}")
 ## Architecture
 
 ```
-TranspOLMo/
+TranspOLMo2-1B/
 ├── src/
+│   ├── config.py        # Single source of truth for configuration
 │   ├── models/          # Model loading and instrumentation
 │   ├── extraction/      # Activation capture and dataset building
 │   ├── analysis/        # Core analysis modules
@@ -102,9 +125,27 @@ TranspOLMo/
 │   ├── documentation/   # Documentation generation
 │   ├── verification/    # Intervention and testing
 │   └── visualization/   # Plotting and interactive tools
+├── configs/             # YAML configuration files
+│   └── kaggle.yaml      # Kaggle-optimized settings
 ├── scripts/             # Execution scripts
-├── notebooks/           # Jupyter notebooks for exploration
-└── results/             # Analysis outputs
+│   ├── run_full_analysis.py  # Main analysis pipeline
+│   ├── minimal_test.py       # Quick low-memory test
+│   └── kaggle_run.sh         # Kaggle helper script
+├── notebooks/           # Jupyter notebooks
+│   ├── 01_quick_start.ipynb  # Interactive tutorial
+│   └── kaggle_starter.ipynb  # Kaggle deployment
+├── docs/                # Documentation
+│   ├── configuration.md      # Config system guide
+│   ├── memory_optimization.md # Memory management
+│   ├── architecture.md       # System design
+│   └── kaggle_deployment.md  # Kaggle guide
+├── tests/               # Test suite
+├── data/                # Data storage
+│   ├── models/          # Cached models
+│   ├── activations/     # Captured activations
+│   ├── features/        # Extracted features
+│   └── circuits/        # Circuit analysis
+└── results/             # Analysis outputs (configurable)
 ```
 
 ## Analysis Pipeline
@@ -114,10 +155,12 @@ TranspOLMo/
 - Extract architectural constraints
 - Inspect layer structure
 
-### Phase 2: Activation Extraction
+### Phase 2: Activation Extraction (Memory-Efficient)
 - Build diverse analysis dataset
-- Hook target layers
-- Capture activations during forward passes
+- Process layers one-at-a-time to minimize GPU memory
+- Hook target layers and capture activations
+- Save to disk immediately with checkpointing
+- Automatic OOM handling with batch size reduction
 
 ### Phase 3: Geometric Analysis
 - Estimate intrinsic dimensionality (PCA, MLE)
@@ -153,16 +196,19 @@ TranspOLMo/
 After running the full analysis:
 
 ```
-results/
+results/  (or custom --output-dir)
+├── activations_layer_*.pt        # Saved activations per layer
 ├── geometric_analysis.json       # Geometric properties per layer
+├── transparency_scores.json      # Quick summary of results
 ├── sae_layer_*.pt                # Trained SAE models
-└── features_catalog.json         # Feature characterizations
-
-docs/findings/
 ├── model_documentation.json      # Complete structured documentation
 ├── model_documentation.md        # Human-readable report
-└── summary.json                  # Quick summary statistics
+├── summary.json                  # Quick summary statistics
+└── checkpoints/
+    └── extraction_progress.json  # Resume checkpoint
 ```
+
+**Note**: Output directory is configurable via `--output-dir` or YAML config.
 
 ## Key Concepts
 
@@ -182,6 +228,42 @@ Features that respond to single, interpretable concepts rather than superposed m
 ### Computational Circuits
 
 Directed graphs showing information flow through attention heads and MLPs that implement specific algorithms (e.g., subject-verb agreement, entity tracking).
+
+## Running on Kaggle (Free GPU)
+
+TranspOLMo is pre-configured for Kaggle notebooks with free GPU access:
+
+1. **Upload notebook**: Use `notebooks/kaggle_starter.ipynb`
+2. **Enable GPU**: Settings → Accelerator → GPU T4 x2
+3. **Run cells**: The notebook handles everything automatically
+
+See [Kaggle Deployment Guide](docs/kaggle_deployment.md) for detailed instructions.
+
+**Quick start in Kaggle:**
+```bash
+!bash scripts/kaggle_run.sh
+```
+
+## Memory Management
+
+TranspOLMo includes automatic memory management for GPUs with limited VRAM:
+
+### Features:
+- ✅ **One-layer-at-a-time processing**: Never loads all layers simultaneously
+- ✅ **Automatic OOM handling**: Catches out-of-memory errors and reduces batch size
+- ✅ **Progress checkpointing**: Resume from crashes without losing work
+- ✅ **Memory estimation**: Shows expected vs. available memory before starting
+- ✅ **Aggressive cleanup**: `torch.cuda.empty_cache()` after each layer
+
+### For 8GB-16GB GPUs:
+```bash
+python scripts/run_full_analysis.py \
+  --dtype float16 \
+  --layers "0,6,11" \
+  --skip-sae
+```
+
+See [Memory Optimization Guide](docs/memory_optimization.md) for more strategies.
 
 ## Advanced Usage
 

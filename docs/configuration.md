@@ -2,171 +2,112 @@
 
 ## Philosophy: Single Source of Truth
 
-TranspOLMo uses `src/config.py` as the **single source of truth** for all default configuration values. Command-line arguments only **override** these defaults when explicitly provided.
+TranspOLMo uses `src/config.py` as the **single source of truth** for all default configuration values. YAML files and command-line arguments only **override** these defaults when explicitly provided.
 
 ## Configuration Hierarchy
 
-1. **`src/config.py`** - Default values (edit this to change defaults)
-2. **Command-line arguments** - Override defaults when provided
-3. **Environment variables** - (future feature)
+Configuration values are applied in order of priority (highest last):
 
-## How It Works
+1. **`src/config.py`** - Default values (lowest priority)
+2. **YAML config file** - Optional config file via `--config`
+3. **Command-line arguments** - Override everything when explicitly provided (highest priority)
 
-### Config File Structure
+**Example**: If `config.py` has `dtype: "float32"`, YAML has `dtype: "float16"`, and CLI has `--dtype bfloat16`, then **bfloat16** is used.
 
-```python
-# src/config.py
+## Using YAML Config Files
 
-@dataclass
-class ModelConfig:
-    model_name: str = "allenai/OLMo-2-0425-1B"  # ← Default model
-    cache_dir: Path = Path("./data/models")
-    device: str = "cuda"
-    dtype: str = "float32"
+### Creating a YAML Config
 
-@dataclass
-class ExtractionConfig:
-    dataset_name: str = "allenai/dolma"
-    num_samples: int = 10000                     # ← Default sample count
-    max_seq_length: int = 512
-    batch_size: int = 16
+Create a YAML file to override specific settings:
+
+```yaml
+# my_config.yaml
+compute:
+  device: "cuda"
+  dtype: "float16"
+  batch_size: 32
+
+paths:
+  cache_dir: "/path/to/cache"
+  output_dir: "/path/to/results"
+
+analysis:
+  num_samples: 5000
+  layers: [0, 6, 11]
+  skip_sae: true
 ```
 
-### Script Behavior
-
-```python
-# scripts/run_full_analysis.py
-
-# 1. Load defaults from config.py
-config = Config.default()
-
-# 2. Override ONLY if argument provided
-if args.model is not None:
-    config.model.model_name = args.model  # ← Only overrides if --model was used
-```
-
-## Changing Defaults
-
-### Option 1: Edit config.py (Recommended)
-
-Edit `src/config.py` to change the default model:
-
-```python
-model_name: str = "allenai/OLMo-2-0425-1B"  # Your preferred default
-```
-
-Then run without arguments:
-```bash
-python scripts/run_full_analysis.py  # Uses config.py defaults
-```
-
-### Option 2: Override on Command Line
-
-Keep `config.py` as-is, override for one run:
+### Using the Config File
 
 ```bash
-python scripts/run_full_analysis.py --model allenai/OLMo-7B
+python scripts/run_full_analysis.py --config my_config.yaml
 ```
 
-### Option 3: Create Custom Config (Future)
+### Pre-configured Configs
 
-```python
-from src.config import Config
+**`configs/kaggle.yaml`** - Optimized for Kaggle notebooks:
+```yaml
+compute:
+  device: "cuda"
+  dtype: "float16"
+  batch_size: 32
 
-custom_config = Config.from_dict({
-    "model": {"model_name": "allenai/OLMo-7B"},
-    "extraction": {"num_samples": 50000}
-})
+paths:
+  cache_dir: "/kaggle/working/cache"
+  output_dir: "/kaggle/working/results"
+  hf_cache: "/kaggle/working/hf_cache"
+
+analysis:
+  num_samples: 10000
+  layers: [0, 6, 11]
+  skip_sae: true
 ```
 
-## Available Settings
+## Configuration File Structure
 
-### ModelConfig
-- `model_name`: HuggingFace model identifier
-- `cache_dir`: Where to cache downloaded models
-- `device`: "cuda" or "cpu"
-- `dtype`: "float32", "float16", or "bfloat16"
+### Available Sections
 
-### ExtractionConfig
-- `dataset_name`: Dataset to use for analysis
-- `dataset_subset`: Specific subset (e.g., "cc_en_head")
-- `num_samples`: Number of samples to analyze
-- `max_seq_length`: Maximum sequence length
-- `batch_size`: Batch size for processing
-- `layers_to_capture`: Specific layers to analyze (None = all)
+#### `compute:` - Computation settings
+```yaml
+compute:
+  device: "cuda"        # or "cpu"
+  dtype: "float16"      # or "float32", "bfloat16"
+  batch_size: 32        # Batch size for processing
+```
 
-### AnalysisConfig
-- `sae_hidden_size`: SAE expansion factor * input_dim
-- `sae_l1_coefficient`: L1 sparsity penalty weight
-- `sae_learning_rate`: Learning rate for SAE training
-- `sae_batch_size`: Batch size for SAE training
-- `sae_num_epochs`: Number of training epochs
-- `pca_components`: Number of PCA components to compute
-- `clustering_algorithm`: "kmeans", "hdbscan", etc.
-- `num_clusters`: Number of clusters for feature grouping
+#### `paths:` - File system paths
+```yaml
+paths:
+  cache_dir: "./data/models"      # Model cache directory
+  output_dir: "./results"          # Output directory
+  hf_cache: "./hf_cache"          # HuggingFace cache (sets HF_HOME)
+```
 
-### DocumentationConfig
-- `output_dir`: Where to save documentation
-- `database_path`: Path to SQLite database (future)
-- `format`: "json" or "markdown"
-
-## Command Line Arguments
-
-All command-line arguments are **optional**. If not provided, config.py defaults are used.
-
-```bash
-python scripts/run_full_analysis.py \
-  --model allenai/OLMo-2-0425-1B \    # Override model
-  --num-samples 5000 \                 # Override sample count
-  --device cuda \                      # Override device
-  --skip-sae \                         # Skip SAE training
-  --layers "0,6,11"                    # Analyze specific layers
+#### `analysis:` - Analysis parameters
+```yaml
+analysis:
+  num_samples: 10000              # Number of samples to analyze
+  layers: [0, 6, 11]              # Specific layers to analyze
+  skip_sae: true                  # Skip SAE training
 ```
 
 ## Best Practices
 
 1. **For permanent changes**: Edit `src/config.py`
-2. **For experiments**: Use command-line arguments
-3. **For multiple configs**: Create separate config files and load with `Config.from_dict()`
-4. **For automation**: Set config.py to your most common settings, override edge cases
-
-## Example Workflows
-
-### Daily Use (Same Model)
-```python
-# Edit src/config.py once:
-model_name: str = "allenai/OLMo-2-0425-1B"
-
-# Run without arguments:
-python scripts/run_full_analysis.py
-```
-
-### Testing Different Models
-```bash
-# Keep config.py with your main model
-# Override for experiments:
-python scripts/run_full_analysis.py --model allenai/OLMo-7B --num-samples 1000
-python scripts/run_full_analysis.py --model gpt2 --skip-sae
-```
-
-### Batch Processing
-```bash
-#!/bin/bash
-for model in "allenai/OLMo-1B" "allenai/OLMo-7B"; do
-    python scripts/run_full_analysis.py --model $model
-done
-```
+2. **For environment configs**: Create YAML files (Kaggle, local, etc.)
+3. **For experiments**: Use command-line arguments
+4. **For automation**: Use YAML configs + CLI overrides
+5. **Never duplicate**: Don't put the same setting in multiple places
 
 ## Why This Design?
 
 **Benefits:**
-- ✅ Single source of truth (no duplication)
-- ✅ Easy to see all defaults in one place
-- ✅ Command-line overrides are explicit and optional
-- ✅ Version control friendly (config.py tracks changes)
-- ✅ Self-documenting (config.py shows all options)
+- ✅ Single source of truth (`src/config.py`)
+- ✅ Environment-specific configs without code changes
+- ✅ Clear precedence order (config.py → YAML → CLI)
+- ✅ Version control friendly
 
 **Avoids:**
 - ❌ Hardcoded values scattered across codebase
 - ❌ Multiple conflicting defaults
-- ❌ Confusion about which default takes precedence
+- ❌ Editing code to change environment settings
